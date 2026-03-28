@@ -274,6 +274,34 @@ function h(tag, attrs, ...children) {
   return el;
 }
 
+function renderSuggestions() {
+  const sc = document.getElementById("suggestions-container");
+  if (!sc) return;
+  sc.innerHTML = "";
+  if (state.suggestions.length === 0) return;
+  const dd = h("div", { style: { position:"absolute", top:"calc(100% + 6px)", left:"0", right:"60px", background:"#1e293b", border:"1px solid #334155", borderRadius:"14px", overflow:"hidden", zIndex:"20", boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }});
+  state.suggestions.forEach(s => {
+    const z = getZone(getZoneForItem(s));
+    dd.appendChild(h("button", {
+      style: { width:"100%", padding:"12px 16px", background:"transparent", border:"none", borderBottom:"1px solid #1e293b50", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"10px", textAlign:"left" },
+      onMousedown: () => addItem(s),
+    },
+      h("span", {}, z.emoji),
+      h("span", { style: { textTransform:"capitalize", flex:"1" }}, s),
+      h("span", { style: { fontSize:"11px", color:"#64748b", background:"#0f172a", padding:"2px 8px", borderRadius:"6px" }}, z.name),
+    ));
+  });
+  sc.appendChild(dd);
+}
+
+function updateAddBtn() {
+  const btn = document.getElementById("add-btn");
+  if (!btn) return;
+  const hasVal = state.inputValue.trim();
+  btn.style.background = hasVal ? "linear-gradient(135deg,#60a5fa,#3b82f6)" : "#1e293b";
+  btn.style.color = hasVal ? "#fff" : "#475569";
+}
+
 function render() {
   const app = document.getElementById("app");
   app.innerHTML = "";
@@ -427,36 +455,24 @@ function renderList() {
     value: state.inputValue,
     placeholder: "Legg til vare...",
     style: { flex:"1", padding:"14px 18px", background:"#1e293b", border:"2px solid #334155", borderRadius:"16px", color:"#e2e8f0", fontSize:"16px", outline:"none", minWidth:"0" },
-    onInput: (e) => { state.inputValue = e.target.value; updateSuggestions(e.target.value); render(); },
+    onInput: (e) => { state.inputValue = e.target.value; updateSuggestions(e.target.value); renderSuggestions(); updateAddBtn(); },
     onKeydown: (e) => { if (e.key==="Enter") addItem(state.inputValue); },
     onFocus: (e) => e.target.style.borderColor="#60a5fa",
-    onBlur: (e) => { setTimeout(()=>{ e.target.style.borderColor="#334155"; setState({ suggestions:[] }); }, 200); },
+    onBlur: (e) => { setTimeout(()=>{ e.target.style.borderColor="#334155"; state.suggestions=[]; renderSuggestions(); }, 200); },
   });
   inputRow.appendChild(inp);
 
   const addBtn = h("button", {
+    id: "add-btn",
     style: { width:"52px", height:"52px", background: state.inputValue.trim() ? "linear-gradient(135deg,#60a5fa,#3b82f6)" : "#1e293b", border:"none", borderRadius:"16px", color: state.inputValue.trim() ? "#fff" : "#475569", fontSize:"24px", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:"0", transition:"all 0.2s" },
     onClick: () => addItem(state.inputValue),
   }, "+");
   inputRow.appendChild(addBtn);
   inputWrap.appendChild(inputRow);
 
-  // Suggestions
-  if (state.suggestions.length > 0) {
-    const dd = h("div", { style: { position:"absolute", top:"calc(100% + 6px)", left:"0", right:"60px", background:"#1e293b", border:"1px solid #334155", borderRadius:"14px", overflow:"hidden", zIndex:"20", boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }});
-    state.suggestions.forEach(s => {
-      const z = getZone(getZoneForItem(s));
-      dd.appendChild(h("button", {
-        style: { width:"100%", padding:"12px 16px", background:"transparent", border:"none", borderBottom:"1px solid #1e293b50", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"10px", textAlign:"left" },
-        onMousedown: () => addItem(s),
-      },
-        h("span", {}, z.emoji),
-        h("span", { style: { textTransform:"capitalize", flex:"1" }}, s),
-        h("span", { style: { fontSize:"11px", color:"#64748b", background:"#0f172a", padding:"2px 8px", borderRadius:"6px" }}, z.name),
-      ));
-    });
-    inputWrap.appendChild(dd);
-  }
+  // Suggestions container (updated dynamically)
+  const sugContainer = h("div", { id: "suggestions-container" });
+  inputWrap.appendChild(sugContainer);
 
   header.appendChild(inputWrap);
   container.appendChild(header);
