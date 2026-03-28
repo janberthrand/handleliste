@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Handleliste</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiSGFuZGVsaXN0ZSIsInNob3J0X25hbWUiOiJIYW5kZWwiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBmMTcyYSIsInRoZW1lX2NvbG9yIjoiIzBmMTcyYSJ9">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  input { font-family: inherit; }
+  button { font-family: inherit; cursor: pointer; -webkit-appearance: none; }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes checkPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+  .item-row { animation: fadeIn 0.25s ease-out; }
+  .item-row.checked-anim .cb { animation: checkPop 0.25s ease-out; }
+  .bottom-sheet { animation: slideUp 0.3s ease-out; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 0; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const ZONES = [
+  { id:"frukt", name:"Frukt & grønt", emoji:"🥬", color:"#4ade80" },
+  { id:"brod", name:"Brød & bakevarer", emoji:"🍞", color:"#f59e0b" },
+  { id:"meieri", name:"Meieri & egg", emoji:"🧀", color:"#60a5fa" },
+  { id:"kjott", name:"Kjøtt & fisk", emoji:"🥩", color:"#f87171" },
+  { id:"frys", name:"Frysevarer", emoji:"🧊", color:"#a78bfa" },
+  { id:"torrvarer", name:"Tørrvarer & hermetikk", emoji:"🥫", color:"#fb923c" },
+  { id:"drikke", name:"Drikke", emoji:"🥤", color:"#38bdf8" },
+  { id:"snacks", name:"Snacks & godteri", emoji:"🍫", color:"#e879f9" },
+  { id:"husholdning", name:"Husholdning", emoji:"🧹", color:"#94a3b8" },
+  { id:"annet", name:"Annet", emoji:"📦", color:"#a1a1aa" },
+];
+
+const COMMON = {
+  "epler":"frukt","bananer":"frukt","appelsiner":"frukt","sitroner":"frukt",
+  "avokado":"frukt","tomater":"frukt","agurk":"frukt","paprika":"frukt",
+  "løk":"frukt","hvitløk":"frukt","poteter":"frukt","gulrøtter":"frukt",
+  "brokkoli":"frukt","spinat":"frukt","salat":"frukt","sopp":"frukt",
+  "ingefær":"frukt","lime":"frukt","mango":"frukt","druer":"frukt",
+  "jordbær":"frukt","blåbær":"frukt","bringebær":"frukt","squash":"frukt",
+  "purre":"frukt","selleri":"frukt","blomkål":"frukt","søtpotet":"frukt",
+  "rødløk":"frukt","vårløk":"frukt","persille":"frukt","basilikum":"frukt",
+  "koriander":"frukt","dill":"frukt","gressløk":"frukt","rosenkål":"frukt",
+  "grønnkål":"frukt","mais":"frukt","erter":"frukt","bønner":"frukt",
+  "ananas":"frukt","vannmelon":"frukt","pærer":"frukt","kiwi":"frukt",
+  "clementiner":"frukt","granateple":"frukt","fersken":"frukt","sitrongress":"frukt",
+  "brød":"brod","rundstykker":"brod","baguette":"brod","knekkebrød":"brod",
+  "lomper":"brod","tortilla":"brod","pitabrød":"brod","mel":"brod",
+  "gjær":"brod","kake":"brod","muffins":"brod","croissanter":"brod",
+  "havrebrød":"brod","loff":"brod","polarbrød":"brod","wraps":"brod",
+  "melk":"meieri","lettmelk":"meieri","fløte":"meieri","rømme":"meieri",
+  "yoghurt":"meieri","ost":"meieri","smør":"meieri","egg":"meieri",
+  "kremost":"meieri","cottage cheese":"meieri","parmesan":"meieri",
+  "mozzarella":"meieri","brunost":"meieri","norvegia":"meieri",
+  "jarlsberg":"meieri","cheddar":"meieri","skyr":"meieri",
+  "hvitost":"meieri","gulost":"meieri","matfløte":"meieri",
+  "kremfløte":"meieri","crème fraîche":"meieri","kesam":"meieri",
+  "kylling":"kjott","kyllingfilet":"kjott","kjøttdeig":"kjott",
+  "bacon":"kjott","pølser":"kjott","laks":"kjott","torsk":"kjott",
+  "sei":"kjott","reker":"kjott","skinke":"kjott","salami":"kjott",
+  "biff":"kjott","svinekjøtt":"kjott","lam":"kjott","ribbe":"kjott",
+  "makrell":"kjott","tunfisk":"kjott","koteletter":"kjott",
+  "medisterpølse":"kjott","wienerpølser":"kjott","leverpostei":"kjott",
+  "frossenpizza":"frys","is":"frys","frosne bær":"frys",
+  "frosne grønnsaker":"frys","fiskepinner":"frys","pommes frites":"frys",
+  "ispinne":"frys","frosne middagsretter":"frys",
+  "pasta":"torrvarer","ris":"torrvarer","nudler":"torrvarer",
+  "hermetiske tomater":"torrvarer","kokosmjølk":"torrvarer","olivenolje":"torrvarer",
+  "soyasaus":"torrvarer","ketchup":"torrvarer","sennep":"torrvarer",
+  "majones":"torrvarer","salt":"torrvarer","pepper":"torrvarer",
+  "sukker":"torrvarer","kaffe":"torrvarer","te":"torrvarer",
+  "havregryn":"torrvarer","müsli":"torrvarer","cornflakes":"torrvarer",
+  "syltetøy":"torrvarer","honning":"torrvarer","peanøttsmør":"torrvarer",
+  "nøtter":"torrvarer","rosiner":"torrvarer","tomatpuré":"torrvarer",
+  "buljong":"torrvarer","krydder":"torrvarer","spissolje":"torrvarer",
+  "eddik":"torrvarer","linser":"torrvarer","kikerter":"torrvarer",
+  "kidneybønner":"torrvarer","sjokolade":"torrvarer",
+  "vann":"drikke","brus":"drikke","juice":"drikke","øl":"drikke",
+  "vin":"drikke","saft":"drikke","cola":"drikke","farris":"drikke",
+  "eplejuice":"drikke","appelsinjuice":"drikke",
+  "chips":"snacks","popcorn":"snacks","kjeks":"snacks","godteri":"snacks",
+  "smågodt":"snacks","tyggegummi":"snacks","lakris":"snacks",
+  "sjokoladeplate":"snacks","nøttemiks":"snacks",
+  "toalettpapir":"husholdning","tørkepapir":"husholdning",
+  "oppvaskmiddel":"husholdning","vaskemiddel":"husholdning",
+  "søppelposer":"husholdning","tannkrem":"husholdning",
+  "sjampo":"husholdning","såpe":"husholdning","deodorant":"husholdning",
+  "stearinlys":"husholdning","batterier":"husholdning",
+  "aluminiumsfolie":"husholdning","matpapir":"husholdning",
+  "plastfolie":"husholdning","fryseposer":"husholdning",
+};
+
+// ═══════════════════════════════════════════
+// STORAGE
+// ═══════════════════════════════════════════
+function load(key, fallback) {
+  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; }
+  catch { return fallback; }
+}
+function save(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let state = {
+  view: "list", // list | stores | editStore
+  stores: load("hl-stores", [{ id: "default", name: "Min butikk", zones: ZONES.map(z=>z.id) }]),
+  activeStoreId: load("hl-active", "default"),
+  items: load("hl-items", []),
+  learned: load("hl-learned", {}),
+  editingStore: null,
+  inputValue: "",
+  suggestions: [],
+  zonePicker: null,
+};
+
+function getZone(id) { return ZONES.find(z=>z.id===id) || ZONES[ZONES.length-1]; }
+function activeStore() { return state.stores.find(s=>s.id===state.activeStoreId) || state.stores[0]; }
+
+function getZoneForItem(name) {
+  const lower = name.toLowerCase().trim();
+  const key = state.activeStoreId + ":" + lower;
+  if (state.learned[key]) return state.learned[key];
+  if (COMMON[lower]) return COMMON[lower];
+  return "annet";
+}
+
+function persist() {
+  save("hl-stores", state.stores);
+  save("hl-active", state.activeStoreId);
+  save("hl-items", state.items);
+  save("hl-learned", state.learned);
+}
+
+function setState(changes) {
+  Object.assign(state, changes);
+  persist();
+  render();
+}
+
+// ═══════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════
+function addItem(name) {
+  if (!name.trim()) return;
+  const zone = getZoneForItem(name.trim());
+  state.items.push({
+    id: Date.now().toString() + Math.random().toString(36).slice(2,6),
+    name: name.trim(),
+    zone,
+    checked: false,
+    storeId: state.activeStoreId,
+  });
+  setState({ inputValue: "", suggestions: [] });
+  setTimeout(() => {
+    const inp = document.getElementById("main-input");
+    if (inp) inp.focus();
+  }, 50);
+}
+
+function toggleItem(id) {
+  const item = state.items.find(i=>i.id===id);
+  if (item) item.checked = !item.checked;
+  setState({});
+}
+
+function removeItem(id) {
+  state.items = state.items.filter(i=>i.id!==id);
+  setState({});
+}
+
+function clearChecked() {
+  state.items = state.items.filter(i => i.storeId !== state.activeStoreId || !i.checked);
+  setState({});
+}
+
+function reassignZone(itemId, newZone) {
+  const item = state.items.find(i=>i.id===itemId);
+  if (item) {
+    const key = state.activeStoreId + ":" + item.name.toLowerCase().trim();
+    state.learned[key] = newZone;
+    item.zone = newZone;
+  }
+  setState({ zonePicker: null });
+}
+
+function updateSuggestions(val) {
+  if (val.length < 2) { state.suggestions = []; return; }
+  const lower = val.toLowerCase();
+  const storeItems = state.items.filter(i=>i.storeId===state.activeStoreId && !i.checked);
+  const allKnown = [...Object.keys(COMMON), ...Object.keys(state.learned).map(k=>k.split(":")[1])];
+  const unique = [...new Set(allKnown)];
+  state.suggestions = unique
+    .filter(k => k.startsWith(lower) && !storeItems.some(i=>i.name.toLowerCase()===k))
+    .slice(0, 5);
+}
+
+function addStore() {
+  const ns = { id: Date.now().toString(), name: "Ny butikk", zones: ZONES.map(z=>z.id) };
+  state.stores.push(ns);
+  setState({ editingStore: ns, view: "editStore" });
+}
+
+function deleteStore(id) {
+  if (state.stores.length <= 1) return;
+  state.stores = state.stores.filter(s=>s.id!==id);
+  state.items = state.items.filter(i=>i.storeId!==id);
+  if (state.activeStoreId===id) state.activeStoreId = state.stores[0]?.id;
+  setState({ view: "stores" });
+}
+
+function moveZone(idx, dir) {
+  if (!state.editingStore) return;
+  const zones = [...state.editingStore.zones];
+  const ni = idx + dir;
+  if (ni < 0 || ni >= zones.length) return;
+  [zones[idx], zones[ni]] = [zones[ni], zones[idx]];
+  state.editingStore.zones = zones;
+  // Update in stores array too
+  const s = state.stores.find(s=>s.id===state.editingStore.id);
+  if (s) s.zones = zones;
+  setState({});
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if (attrs) {
+    for (const [k,v] of Object.entries(attrs)) {
+      if (k === "style" && typeof v === "object") {
+        Object.assign(el.style, v);
+      } else if (k.startsWith("on")) {
+        el.addEventListener(k.slice(2).toLowerCase(), v);
+      } else if (k === "className") {
+        el.className = v;
+      } else {
+        el.setAttribute(k, v);
+      }
+    }
+  }
+  for (const c of children.flat()) {
+    if (c == null) continue;
+    el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return el;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  if (state.view === "editStore" && state.editingStore) {
+    app.appendChild(renderEditStore());
+  } else if (state.view === "stores") {
+    app.appendChild(renderStores());
+  } else {
+    app.appendChild(renderList());
+  }
+}
+
+// ─── EDIT STORE ───
+function renderEditStore() {
+  const es = state.editingStore;
+  return h("div", { style: { minHeight:"100vh", background:"#0f172a", paddingBottom:"40px" }},
+    // Header
+    h("div", { style: { padding:"16px 20px", display:"flex", alignItems:"center", gap:"12px", borderBottom:"1px solid #1e293b", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }},
+      h("button", { style: { background:"none", border:"none", color:"#60a5fa", fontSize:"16px", padding:"4px 0" }, onClick: () => setState({ view:"stores" }) }, "← Tilbake"),
+      h("span", { style: { fontSize:"18px", fontWeight:"600" }}, "Rediger butikk")
+    ),
+    h("div", { style: { padding:"20px" }},
+      // Name
+      h("div", { style: { marginBottom:"28px" }},
+        h("label", { style: { fontSize:"13px", color:"#94a3b8", marginBottom:"8px", display:"block", textTransform:"uppercase", letterSpacing:"1px" }}, "Butikknavn"),
+        h("input", {
+          value: es.name,
+          style: { width:"100%", padding:"14px 16px", background:"#1e293b", border:"2px solid #334155", borderRadius:"14px", color:"#e2e8f0", fontSize:"17px", outline:"none" },
+          onInput: (e) => {
+            es.name = e.target.value;
+            const s = state.stores.find(s=>s.id===es.id);
+            if (s) s.name = e.target.value;
+            persist();
+          },
+          onFocus: (e) => e.target.style.borderColor="#60a5fa",
+          onBlur: (e) => e.target.style.borderColor="#334155",
+        })
+      ),
+      // Zones
+      h("label", { style: { fontSize:"13px", color:"#94a3b8", marginBottom:"12px", display:"block", textTransform:"uppercase", letterSpacing:"1px" }}, "Sonerekkefølge – din rute gjennom butikken"),
+      ...es.zones.map((zid, idx) => {
+        const z = getZone(zid);
+        return h("div", { style: { display:"flex", alignItems:"center", gap:"12px", padding:"12px 16px", background:"#1e293b", borderRadius:"12px", marginBottom:"8px" }},
+          h("span", { style: { fontSize:"13px", color:"#64748b", fontWeight:"700", width:"24px", textAlign:"center" }}, String(idx+1)),
+          h("span", { style: { fontSize:"20px" }}, z.emoji),
+          h("span", { style: { flex:"1", fontSize:"15px", fontWeight:"500" }}, z.name),
+          h("div", { style: { display:"flex", gap:"4px" }},
+            h("button", {
+              style: { width:"36px", height:"36px", borderRadius:"8px", border:"none", background: idx===0?"#1e293b":"#334155", color: idx===0?"#475569":"#e2e8f0", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" },
+              onClick: () => moveZone(idx, -1),
+            }, "↑"),
+            h("button", {
+              style: { width:"36px", height:"36px", borderRadius:"8px", border:"none", background: idx===es.zones.length-1?"#1e293b":"#334155", color: idx===es.zones.length-1?"#475569":"#e2e8f0", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" },
+              onClick: () => moveZone(idx, 1),
+            }, "↓"),
+          )
+        );
+      }),
+      // Delete
+      state.stores.length > 1 ? h("button", {
+        style: { marginTop:"32px", width:"100%", padding:"14px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:"14px", color:"#ef4444", fontSize:"15px", fontWeight:"600" },
+        onClick: () => deleteStore(es.id),
+      }, "Slett butikk") : null
+    )
+  );
+}
+
+// ─── STORE LIST ───
+function renderStores() {
+  return h("div", { style: { minHeight:"100vh", background:"#0f172a" }},
+    h("div", { style: { padding:"16px 20px", display:"flex", alignItems:"center", gap:"12px", borderBottom:"1px solid #1e293b", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }},
+      h("button", { style: { background:"none", border:"none", color:"#60a5fa", fontSize:"16px", padding:"4px 0" }, onClick: () => setState({ view:"list" }) }, "← Tilbake"),
+      h("span", { style: { fontSize:"18px", fontWeight:"600", flex:"1" }}, "Butikker"),
+      h("button", { style: { background:"#60a5fa", border:"none", color:"#0f172a", borderRadius:"10px", padding:"8px 16px", fontSize:"14px", fontWeight:"700" }, onClick: addStore }, "+ Ny"),
+    ),
+    h("div", { style: { padding:"20px" }},
+      ...state.stores.map(store => {
+        const count = state.items.filter(i=>i.storeId===store.id && !i.checked).length;
+        return h("div", {
+          style: { display:"flex", alignItems:"center", gap:"14px", padding:"16px 18px", background: store.id===state.activeStoreId?"#1e293b":"transparent", borderRadius:"14px", marginBottom:"6px", cursor:"pointer", border: store.id===state.activeStoreId?"1px solid #334155":"1px solid transparent" },
+          onClick: () => setState({ activeStoreId: store.id, view: "list" }),
+        },
+          h("div", { style: { width:"44px", height:"44px", borderRadius:"12px", background:"linear-gradient(135deg,#1e293b,#334155)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", flexShrink:"0" }}, "🏪"),
+          h("div", { style: { flex:"1", minWidth:"0" }},
+            h("div", { style: { fontSize:"16px", fontWeight:"600" }}, store.name),
+            h("div", { style: { fontSize:"13px", color:"#64748b" }}, count > 0 ? count + " vare" + (count!==1?"r":"") : "Tom liste"),
+          ),
+          h("button", {
+            style: { background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:"10px", padding:"8px 14px", fontSize:"13px", flexShrink:"0" },
+            onClick: (e) => { e.stopPropagation(); setState({ editingStore: store, view:"editStore" }); },
+          }, "Rediger"),
+        );
+      })
+    )
+  );
+}
+
+// ─── MAIN LIST ───
+function renderList() {
+  const store = activeStore();
+  const storeItems = state.items.filter(i=>i.storeId===state.activeStoreId);
+  const unchecked = storeItems.filter(i=>!i.checked).length;
+  const checked = storeItems.filter(i=>i.checked).length;
+  const zoneOrder = store?.zones || ZONES.map(z=>z.id);
+
+  const grouped = zoneOrder.map(zid => ({
+    zone: getZone(zid),
+    items: storeItems.filter(i=>i.zone===zid),
+  })).filter(g=>g.items.length>0);
+
+  const container = h("div", { style: { minHeight:"100vh", background:"#0f172a", paddingBottom:"100px" }});
+
+  // ── Header ──
+  const header = h("div", { style: { padding:"20px 20px 16px", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }});
+
+  const topRow = h("div", { style: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }});
+  const left = h("div", {},
+    h("h1", { style: { margin:"0", fontSize:"28px", fontWeight:"800", letterSpacing:"-0.5px", color:"#e2e8f0" }}, "Handleliste"),
+    h("button", {
+      style: { background:"none", border:"none", color:"#60a5fa", fontSize:"14px", padding:"4px 0", display:"flex", alignItems:"center", gap:"6px" },
+      onClick: () => setState({ view:"stores" }),
+    }, "🏪 " + (store?.name || "Velg butikk") + " ›"),
+  );
+  topRow.appendChild(left);
+
+  if (checked > 0) {
+    topRow.appendChild(h("button", {
+      style: { background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#f87171", borderRadius:"12px", padding:"8px 14px", fontSize:"13px", fontWeight:"600", flexShrink:"0" },
+      onClick: clearChecked,
+    }, "Fjern ✓ (" + checked + ")"));
+  }
+  header.appendChild(topRow);
+
+  // Counter pills
+  if (storeItems.length > 0) {
+    const pills = h("div", { style: { display:"flex", gap:"8px", marginBottom:"16px" }});
+    pills.appendChild(h("span", { style: { background:"#1e293b", borderRadius:"20px", padding:"5px 14px", fontSize:"13px", fontWeight:"600", color:"#94a3b8" }}, unchecked + " igjen"));
+    if (checked > 0) {
+      pills.appendChild(h("span", { style: { background:"rgba(74,222,128,0.1)", borderRadius:"20px", padding:"5px 14px", fontSize:"13px", fontWeight:"600", color:"#4ade80" }}, "✓ " + checked + " ferdig"));
+    }
+    header.appendChild(pills);
+  }
+
+  // Input
+  const inputWrap = h("div", { style: { position:"relative" }});
+  const inputRow = h("div", { style: { display:"flex", gap:"8px" }});
+
+  const inp = h("input", {
+    id: "main-input",
+    value: state.inputValue,
+    placeholder: "Legg til vare...",
+    style: { flex:"1", padding:"14px 18px", background:"#1e293b", border:"2px solid #334155", borderRadius:"16px", color:"#e2e8f0", fontSize:"16px", outline:"none", minWidth:"0" },
+    onInput: (e) => { state.inputValue = e.target.value; updateSuggestions(e.target.value); render(); },
+    onKeydown: (e) => { if (e.key==="Enter") addItem(state.inputValue); },
+    onFocus: (e) => e.target.style.borderColor="#60a5fa",
+    onBlur: (e) => { setTimeout(()=>{ e.target.style.borderColor="#334155"; setState({ suggestions:[] }); }, 200); },
+  });
+  inputRow.appendChild(inp);
+
+  const addBtn = h("button", {
+    style: { width:"52px", height:"52px", background: state.inputValue.trim() ? "linear-gradient(135deg,#60a5fa,#3b82f6)" : "#1e293b", border:"none", borderRadius:"16px", color: state.inputValue.trim() ? "#fff" : "#475569", fontSize:"24px", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:"0", transition:"all 0.2s" },
+    onClick: () => addItem(state.inputValue),
+  }, "+");
+  inputRow.appendChild(addBtn);
+  inputWrap.appendChild(inputRow);
+
+  // Suggestions
+  if (state.suggestions.length > 0) {
+    const dd = h("div", { style: { position:"absolute", top:"calc(100% + 6px)", left:"0", right:"60px", background:"#1e293b", border:"1px solid #334155", borderRadius:"14px", overflow:"hidden", zIndex:"20", boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }});
+    state.suggestions.forEach(s => {
+      const z = getZone(getZoneForItem(s));
+      dd.appendChild(h("button", {
+        style: { width:"100%", padding:"12px 16px", background:"transparent", border:"none", borderBottom:"1px solid #1e293b50", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"10px", textAlign:"left" },
+        onMousedown: () => addItem(s),
+      },
+        h("span", {}, z.emoji),
+        h("span", { style: { textTransform:"capitalize", flex:"1" }}, s),
+        h("span", { style: { fontSize:"11px", color:"#64748b", background:"#0f172a", padding:"2px 8px", borderRadius:"6px" }}, z.name),
+      ));
+    });
+    inputWrap.appendChild(dd);
+  }
+
+  header.appendChild(inputWrap);
+  container.appendChild(header);
+
+  // ── Items ──
+  const list = h("div", { style: { padding:"8px 20px" }});
+
+  if (storeItems.length === 0) {
+    list.appendChild(h("div", { style: { textAlign:"center", padding:"60px 20px", color:"#475569" }},
+      h("div", { style: { fontSize:"48px", marginBottom:"16px" }}, "🛒"),
+      h("div", { style: { fontSize:"17px", fontWeight:"600", marginBottom:"6px" }}, "Handlelisten er tom"),
+      h("div", { style: { fontSize:"14px" }}, "Legg til varer for å komme i gang"),
+    ));
+  }
+
+  grouped.forEach(({ zone, items }) => {
+    const section = h("div", { style: { marginBottom:"20px" }});
+
+    // Zone header
+    const zh = h("div", { style: { display:"flex", alignItems:"center", gap:"10px", padding:"8px 0" }});
+    zh.appendChild(h("div", { style: { width:"6px", height:"6px", borderRadius:"50%", background:zone.color, boxShadow:"0 0 8px "+zone.color+"50" }}));
+    zh.appendChild(h("span", { style: { fontSize:"12px", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.08em", color:zone.color }}, zone.emoji + " " + zone.name));
+    zh.appendChild(h("div", { style: { flex:"1", height:"1px", background:zone.color+"20" }}));
+    section.appendChild(zh);
+
+    // Items
+    items.forEach(item => {
+      const row = h("div", {
+        className: "item-row",
+        style: { display:"flex", alignItems:"center", gap:"14px", padding:"13px 14px", background: item.checked?"transparent":"#1e293b", borderRadius:"14px", marginBottom:"4px", opacity: item.checked?"0.4":"1", transition:"all 0.2s", border: item.checked?"1px solid transparent":"1px solid #1e293b", position:"relative" },
+      });
+
+      // Checkbox
+      row.appendChild(h("button", {
+        className: "cb",
+        style: { width:"28px", height:"28px", borderRadius:"8px", border: item.checked?"none":"2px solid "+zone.color+"60", background: item.checked?zone.color:"transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px", color:"#0f172a", flexShrink:"0", transition:"all 0.2s" },
+        onClick: () => toggleItem(item.id),
+      }, item.checked ? "✓" : ""));
+
+      // Name
+      row.appendChild(h("span", {
+        style: { flex:"1", fontSize:"16px", fontWeight:"500", textDecoration: item.checked?"line-through":"none", textTransform:"capitalize", minWidth:"0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
+      }, item.name));
+
+      // Zone reassign
+      row.appendChild(h("button", {
+        style: { background:"none", border:"none", fontSize:"16px", padding:"4px", opacity:"0.5", flexShrink:"0" },
+        onClick: () => setState({ zonePicker: state.zonePicker===item.id ? null : item.id }),
+      }, zone.emoji));
+
+      // Delete
+      row.appendChild(h("button", {
+        style: { background:"none", border:"none", color:"#475569", fontSize:"20px", padding:"4px", lineHeight:"1", flexShrink:"0" },
+        onClick: () => removeItem(item.id),
+      }, "×"));
+
+      section.appendChild(row);
+    });
+
+    list.appendChild(section);
+  });
+
+  container.appendChild(list);
+
+  // ── Zone Picker Bottom Sheet ──
+  if (state.zonePicker) {
+    const item = state.items.find(i=>i.id===state.zonePicker);
+    if (item) {
+      const overlay = h("div", {
+        style: { position:"fixed", top:"0", left:"0", right:"0", bottom:"0", background:"rgba(0,0,0,0.6)", zIndex:"100", display:"flex", alignItems:"flex-end", justifyContent:"center" },
+        onClick: () => setState({ zonePicker: null }),
+      });
+      const sheet = h("div", {
+        className: "bottom-sheet",
+        style: { background:"#1e293b", borderRadius:"20px 20px 0 0", padding:"20px", width:"100%", maxWidth:"500px", maxHeight:"60vh", overflow:"auto", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" },
+        onClick: (e) => e.stopPropagation(),
+      });
+      sheet.appendChild(h("div", { style: { width:"40px", height:"4px", background:"#475569", borderRadius:"2px", margin:"0 auto 16px" }}));
+      sheet.appendChild(h("div", { style: { fontSize:"16px", fontWeight:"700", marginBottom:"14px", textAlign:"center" }}, "Flytt «" + item.name + "» til:"));
+
+      const store = activeStore();
+      (store?.zones || []).forEach(zid => {
+        const z = getZone(zid);
+        sheet.appendChild(h("button", {
+          style: { width:"100%", padding:"14px 16px", background: item.zone===zid ? z.color+"20" : "transparent", border: item.zone===zid ? "1px solid "+z.color+"40" : "1px solid transparent", borderRadius:"12px", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"12px", marginBottom:"4px", textAlign:"left" },
+          onClick: () => reassignZone(item.id, zid),
+        },
+          h("span", { style: { fontSize:"22px" }}, z.emoji),
+          h("span", { style: { fontWeight: item.zone===zid?"700":"400", flex:"1" }}, z.name),
+          item.zone===zid ? h("span", { style: { color:z.color }}, "✓") : null,
+        ));
+      });
+
+      overlay.appendChild(sheet);
+      container.appendChild(overlay);
+    }
+  }
+
+  return container;
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
