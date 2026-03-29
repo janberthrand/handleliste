@@ -7,56 +7,83 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f172a">
 <title>Handleliste</title>
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiSGFuZGVsaXN0ZSIsInNob3J0X25hbWUiOiJIYW5kZWwiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBmMTcyYSIsInRoZW1lX2NvbG9yIjoiIzBmMTcyYSJ9">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #0f172a;
-    color: #e2e8f0;
-    min-height: 100vh;
-    min-height: 100dvh;
-    overscroll-behavior: none;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-  input { font-family: inherit; }
-  button { font-family: inherit; cursor: pointer; -webkit-appearance: none; }
-
-  /* Animations */
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  @keyframes checkPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
-
-  .item-row { animation: fadeIn 0.25s ease-out; }
-  .item-row.checked-anim .cb { animation: checkPop 0.25s ease-out; }
-  .bottom-sheet { animation: slideUp 0.3s ease-out; }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 0; }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;min-height:100dvh;overscroll-behavior:none}
+input,button{font-family:inherit}button{cursor:pointer;-webkit-appearance:none}
+::-webkit-scrollbar{width:0}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.item-enter{animation:fadeIn .2s ease-out}
+.bottom-sheet{animation:slideUp .25s ease-out}
+.sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.sync-dot.online{background:#4ade80;box-shadow:0 0 6px #4ade8060}
+.sync-dot.offline{background:#f87171;box-shadow:0 0 6px #f8717160}
 </style>
 </head>
 <body>
+<div id="app">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center;color:#94a3b8">
+      <div style="font-size:32px;margin-bottom:12px">🛒</div>
+      <div style="font-size:16px">Kobler til...</div>
+    </div>
+  </div>
+</div>
 
-<div id="app"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-<script>
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════
+// FIREBASE INIT
+// ═══════════════════════════════════════
+const app = initializeApp({
+  apiKey: "AIzaSyCwRR55wYXTb3YgAxb5HYaXr7hTDI5_fiY",
+  authDomain: "handleliste-app-1269b.firebaseapp.com",
+  databaseURL: "https://handleliste-app-1269b-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "handleliste-app-1269b",
+  storageBucket: "handleliste-app-1269b.firebasestorage.app",
+  messagingSenderId: "561934471020",
+  appId: "1:561934471020:web:5cd0f681fb2406c1eeed49"
+});
+
+const db = getDatabase(app);
+const itemsRef = ref(db, "items");
+const storePrefsRef = ref(db, "storePrefs");
+const zoneMappingsRef = ref(db, "zoneMappings");
+const zoneOrderRef = ref(db, "zoneOrder");
+const connectedRef = ref(db, ".info/connected");
+
+let isOnline = false;
+onValue(connectedRef, snap => {
+  isOnline = !!snap.val();
+  updateSyncIndicator();
+});
+
+// ═══════════════════════════════════════
 // DATA
-// ═══════════════════════════════════════════
-const ZONES = [
-  { id:"frukt", name:"Frukt & grønt", emoji:"🥬", color:"#4ade80" },
-  { id:"brod", name:"Brød & bakevarer", emoji:"🍞", color:"#f59e0b" },
-  { id:"meieri", name:"Meieri & egg", emoji:"🧀", color:"#60a5fa" },
-  { id:"kjott", name:"Kjøtt & fisk", emoji:"🥩", color:"#f87171" },
-  { id:"frys", name:"Frysevarer", emoji:"🧊", color:"#a78bfa" },
-  { id:"torrvarer", name:"Tørrvarer & hermetikk", emoji:"🥫", color:"#fb923c" },
-  { id:"drikke", name:"Drikke", emoji:"🥤", color:"#38bdf8" },
-  { id:"snacks", name:"Snacks & godteri", emoji:"🍫", color:"#e879f9" },
-  { id:"husholdning", name:"Husholdning", emoji:"🧹", color:"#94a3b8" },
-  { id:"annet", name:"Annet", emoji:"📦", color:"#a1a1aa" },
+// ═══════════════════════════════════════
+const ZONES=[
+  {id:"frukt",name:"Frukt & grønt",emoji:"🥬",color:"#4ade80"},
+  {id:"brod",name:"Brød & bakevarer",emoji:"🍞",color:"#f59e0b"},
+  {id:"meieri",name:"Meieri & egg",emoji:"🧀",color:"#60a5fa"},
+  {id:"kjott",name:"Kjøtt & fisk",emoji:"🥩",color:"#f87171"},
+  {id:"frys",name:"Frysevarer",emoji:"🧊",color:"#a78bfa"},
+  {id:"torrvarer",name:"Tørrvarer & hermetikk",emoji:"🥫",color:"#fb923c"},
+  {id:"drikke",name:"Drikke",emoji:"🥤",color:"#38bdf8"},
+  {id:"snacks",name:"Snacks & godteri",emoji:"🍫",color:"#e879f9"},
+  {id:"husholdning",name:"Husholdning",emoji:"🧹",color:"#94a3b8"},
+  {id:"annet",name:"Annet",emoji:"📦",color:"#a1a1aa"},
 ];
 
-const COMMON = {
+const STORE_DEFS=[
+  {id:"kiwi",name:"Kiwi",emoji:"🥝",color:"#4ade80"},
+  {id:"meny",name:"Meny",emoji:"🟡",color:"#f59e0b"},
+  {id:"andre",name:"Andre",emoji:"🏬",color:"#a78bfa"},
+];
+
+const COMMON={
   "epler":"frukt","bananer":"frukt","appelsiner":"frukt","sitroner":"frukt",
   "avokado":"frukt","tomater":"frukt","agurk":"frukt","paprika":"frukt",
   "løk":"frukt","hvitløk":"frukt","poteter":"frukt","gulrøtter":"frukt",
@@ -68,7 +95,7 @@ const COMMON = {
   "koriander":"frukt","dill":"frukt","gressløk":"frukt","rosenkål":"frukt",
   "grønnkål":"frukt","mais":"frukt","erter":"frukt","bønner":"frukt",
   "ananas":"frukt","vannmelon":"frukt","pærer":"frukt","kiwi":"frukt",
-  "clementiner":"frukt","granateple":"frukt","fersken":"frukt","sitrongress":"frukt",
+  "clementiner":"frukt","granateple":"frukt","fersken":"frukt",
   "brød":"brod","rundstykker":"brod","baguette":"brod","knekkebrød":"brod",
   "lomper":"brod","tortilla":"brod","pitabrød":"brod","mel":"brod",
   "gjær":"brod","kake":"brod","muffins":"brod","croissanter":"brod",
@@ -115,466 +142,582 @@ const COMMON = {
   "plastfolie":"husholdning","fryseposer":"husholdning",
 };
 
-// ═══════════════════════════════════════════
-// STORAGE
-// ═══════════════════════════════════════════
-function load(key, fallback) {
-  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; }
-  catch { return fallback; }
-}
-function save(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
-}
-
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════
 // STATE
-// ═══════════════════════════════════════════
-let state = {
-  view: "list", // list | stores | editStore
-  stores: load("hl-stores", [{ id: "default", name: "Min butikk", zones: ZONES.map(z=>z.id) }]),
-  activeStoreId: load("hl-active", "default"),
-  items: load("hl-items", []),
-  learned: load("hl-learned", {}),
-  editingStore: null,
-  inputValue: "",
-  suggestions: [],
-  zonePicker: null,
+// ═══════════════════════════════════════
+const defaultZoneOrder={kiwi:ZONES.map(z=>z.id),meny:ZONES.map(z=>z.id),andre:ZONES.map(z=>z.id)};
+
+let S={
+  view:"list",
+  activeTab:localStorage.getItem("hl-tab")||"kiwi",
+  items:[],
+  storePrefs:{},
+  zoneMappings:{},
+  zoneOrder:{...defaultZoneOrder},
+  editingStoreId:null,
+  inputValue:"",
+  suggestions:[],
+  sheetItem:null,
+  sheetType:null,
+  loaded:false,
 };
 
-function getZone(id) { return ZONES.find(z=>z.id===id) || ZONES[ZONES.length-1]; }
-function activeStore() { return state.stores.find(s=>s.id===state.activeStoreId) || state.stores[0]; }
+// ═══════════════════════════════════════
+// FIREBASE LISTENERS
+// ═══════════════════════════════════════
+let loadCount=0;
+function checkLoaded(){loadCount++;if(loadCount>=4&&!S.loaded){S.loaded=true;render()}}
 
-function getZoneForItem(name) {
-  const lower = name.toLowerCase().trim();
-  const key = state.activeStoreId + ":" + lower;
-  if (state.learned[key]) return state.learned[key];
-  if (COMMON[lower]) return COMMON[lower];
-  return "annet";
+onValue(itemsRef, snap=>{
+  const data=snap.val();
+  S.items=data?Object.values(data):[];
+  if(S.loaded)render();
+  checkLoaded();
+});
+
+onValue(storePrefsRef, snap=>{
+  S.storePrefs=snap.val()||{};
+  if(S.loaded)render();
+  checkLoaded();
+});
+
+onValue(zoneMappingsRef, snap=>{
+  S.zoneMappings=snap.val()||{};
+  if(S.loaded)render();
+  checkLoaded();
+});
+
+onValue(zoneOrderRef, snap=>{
+  S.zoneOrder=snap.val()||{...defaultZoneOrder};
+  if(S.loaded)render();
+  checkLoaded();
+});
+
+setTimeout(()=>{if(!S.loaded){S.loaded=true;render()}},3000);
+
+// ═══════════════════════════════════════
+// FIREBASE WRITES
+// ═══════════════════════════════════════
+function saveItems(){
+  const obj={};
+  S.items.forEach(i=>{obj[i.id]=i});
+  set(itemsRef, obj);
+}
+function saveStorePrefs(){set(storePrefsRef, S.storePrefs)}
+function saveZoneMappings(){set(zoneMappingsRef, S.zoneMappings)}
+function saveZoneOrder(){set(zoneOrderRef, S.zoneOrder)}
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function getZone(id){return ZONES.find(z=>z.id===id)||ZONES[ZONES.length-1]}
+function getStore(id){return STORE_DEFS.find(s=>s.id===id)||STORE_DEFS[0]}
+
+function getZoneForItem(name,storeId){
+  const lower=name.toLowerCase().trim();
+  const key=storeId+"__"+lower;
+  if(S.zoneMappings[key])return S.zoneMappings[key];
+  if(COMMON[lower])return COMMON[lower];
+  return"annet";
 }
 
-function persist() {
-  save("hl-stores", state.stores);
-  save("hl-active", state.activeStoreId);
-  save("hl-items", state.items);
-  save("hl-learned", state.learned);
+function getStoresForItem(name){
+  const lower=name.toLowerCase().trim();
+  if(S.storePrefs[lower] && Array.isArray(S.storePrefs[lower]))return[...S.storePrefs[lower]];
+  return["kiwi"];
 }
 
-function setState(changes) {
-  Object.assign(state, changes);
-  persist();
-  render();
-}
+function isFullyChecked(item){return item.stores&&Array.isArray(item.stores)&&item.stores.every(s=>item.checked&&item.checked[s])}
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════
 // ACTIONS
-// ═══════════════════════════════════════════
-function addItem(name) {
-  if (!name.trim()) return;
-  const zone = getZoneForItem(name.trim());
-  state.items.push({
-    id: Date.now().toString() + Math.random().toString(36).slice(2,6),
-    name: name.trim(),
-    zone,
-    checked: false,
-    storeId: state.activeStoreId,
-  });
-  setState({ inputValue: "", suggestions: [] });
-  setTimeout(() => {
-    const inp = document.getElementById("main-input");
-    if (inp) inp.focus();
-  }, 50);
+// ═══════════════════════════════════════
+function addItem(name){
+  if(!name.trim())return;
+  const lower=name.trim().toLowerCase();
+  const existing=S.items.find(i=>i.name.toLowerCase()===lower&&!isFullyChecked(i));
+  if(existing){S.inputValue="";S.suggestions=[];render();focusInput();return}
+  const stores=getStoresForItem(name.trim());
+  const item={id:Date.now().toString()+Math.random().toString(36).slice(2,6),name:name.trim(),stores,checked:{},note:""};
+  stores.forEach(sid=>{item["zone_"+sid]=getZoneForItem(name.trim(),sid)});
+  S.items.push(item);
+  S.inputValue="";S.suggestions=[];
+  saveItems();render();focusInput();
 }
 
-function toggleItem(id) {
-  const item = state.items.find(i=>i.id===id);
-  if (item) item.checked = !item.checked;
-  setState({});
+function toggleItem(itemId,storeId){
+  const item=S.items.find(i=>i.id===itemId);
+  if(!item)return;
+  if(!item.checked)item.checked={};
+  item.checked[storeId]=!item.checked[storeId];
+  saveItems();render();
 }
 
-function removeItem(id) {
-  state.items = state.items.filter(i=>i.id!==id);
-  setState({});
+function removeItem(id){
+  S.items=S.items.filter(i=>i.id!==id);
+  saveItems();render();
 }
 
-function clearChecked() {
-  state.items = state.items.filter(i => i.storeId !== state.activeStoreId || !i.checked);
-  setState({});
-}
-
-function reassignZone(itemId, newZone) {
-  const item = state.items.find(i=>i.id===itemId);
-  if (item) {
-    const key = state.activeStoreId + ":" + item.name.toLowerCase().trim();
-    state.learned[key] = newZone;
-    item.zone = newZone;
-  }
-  setState({ zonePicker: null });
-}
-
-function updateSuggestions(val) {
-  if (val.length < 2) { state.suggestions = []; return; }
-  const lower = val.toLowerCase();
-  const storeItems = state.items.filter(i=>i.storeId===state.activeStoreId && !i.checked);
-  const allKnown = [...Object.keys(COMMON), ...Object.keys(state.learned).map(k=>k.split(":")[1])];
-  const unique = [...new Set(allKnown)];
-  state.suggestions = unique
-    .filter(k => k.startsWith(lower) && !storeItems.some(i=>i.name.toLowerCase()===k))
-    .slice(0, 5);
-}
-
-function addStore() {
-  const ns = { id: Date.now().toString(), name: "Ny butikk", zones: ZONES.map(z=>z.id) };
-  state.stores.push(ns);
-  setState({ editingStore: ns, view: "editStore" });
-}
-
-function deleteStore(id) {
-  if (state.stores.length <= 1) return;
-  state.stores = state.stores.filter(s=>s.id!==id);
-  state.items = state.items.filter(i=>i.storeId!==id);
-  if (state.activeStoreId===id) state.activeStoreId = state.stores[0]?.id;
-  setState({ view: "stores" });
-}
-
-function moveZone(idx, dir) {
-  if (!state.editingStore) return;
-  const zones = [...state.editingStore.zones];
-  const ni = idx + dir;
-  if (ni < 0 || ni >= zones.length) return;
-  [zones[idx], zones[ni]] = [zones[ni], zones[idx]];
-  state.editingStore.zones = zones;
-  // Update in stores array too
-  const s = state.stores.find(s=>s.id===state.editingStore.id);
-  if (s) s.zones = zones;
-  setState({});
-}
-
-// ═══════════════════════════════════════════
-// RENDER
-// ═══════════════════════════════════════════
-function h(tag, attrs, ...children) {
-  const el = document.createElement(tag);
-  if (attrs) {
-    for (const [k,v] of Object.entries(attrs)) {
-      if (k === "style" && typeof v === "object") {
-        Object.assign(el.style, v);
-      } else if (k.startsWith("on")) {
-        el.addEventListener(k.slice(2).toLowerCase(), v);
-      } else if (k === "className") {
-        el.className = v;
-      } else {
-        el.setAttribute(k, v);
+function clearChecked(storeId){
+  if(storeId==="alle"){
+    S.items=S.items.filter(i=>!isFullyChecked(i));
+  }else{
+    S.items.forEach(i=>{
+      if(i.checked&&i.checked[storeId]){
+        if(i.stores)i.stores=i.stores.filter(s=>s!==storeId);
+        delete i.checked[storeId];
       }
-    }
+    });
+    S.items=S.items.filter(i=>i.stores&&i.stores.length>0);
   }
-  for (const c of children.flat()) {
-    if (c == null) continue;
-    el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  saveItems();render();
+}
+
+function setItemStores(itemId,newStores){
+  const item=S.items.find(i=>i.id===itemId);
+  if(!item)return;
+  item.stores=newStores;
+  newStores.forEach(sid=>{if(!item["zone_"+sid])item["zone_"+sid]=getZoneForItem(item.name,sid)});
+  if(item.checked)Object.keys(item.checked).forEach(k=>{if(!newStores.includes(k))delete item.checked[k]});
+  S.storePrefs[item.name.toLowerCase().trim()]=newStores;
+  S.sheetItem=null;S.sheetType=null;
+  saveItems();saveStorePrefs();render();
+}
+
+function setItemZone(itemId,storeId,newZone){
+  const item=S.items.find(i=>i.id===itemId);
+  if(!item)return;
+  item["zone_"+storeId]=newZone;
+  S.zoneMappings[storeId+"__"+item.name.toLowerCase().trim()]=newZone;
+  S.sheetItem=null;S.sheetType=null;
+  saveItems();saveZoneMappings();render();
+}
+
+function setItemNote(itemId,note){
+  const item=S.items.find(i=>i.id===itemId);
+  if(item)item.note=note;
+  saveItems();
+}
+
+function moveZone(storeId,idx,dir){
+  const zones=[...(S.zoneOrder[storeId]||ZONES.map(z=>z.id))];
+  const ni=idx+dir;
+  if(ni<0||ni>=zones.length)return;
+  [zones[idx],zones[ni]]=[zones[ni],zones[idx]];
+  S.zoneOrder[storeId]=zones;
+  saveZoneOrder();render();
+}
+
+function updateSuggestions(val){
+  if(val.length<2){S.suggestions=[];return}
+  const lower=val.toLowerCase();
+  const allKnown=[...Object.keys(COMMON),...Object.keys(S.storePrefs),...S.items.map(i=>i.name.toLowerCase())];
+  const unique=[...new Set(allKnown)];
+  S.suggestions=unique.filter(k=>k.startsWith(lower)&&!S.items.some(i=>i.name.toLowerCase()===k&&!isFullyChecked(i))).slice(0,5);
+}
+
+function focusInput(){setTimeout(()=>{const inp=document.getElementById("main-input");if(inp)inp.focus()},60)}
+
+function updateSyncIndicator(){
+  const dot=document.getElementById("sync-dot");
+  if(dot)dot.className="sync-dot "+(isOnline?"online":"offline");
+  const label=document.getElementById("sync-label");
+  if(label)label.textContent=isOnline?"Synkronisert":"Offline";
+}
+
+// ═══════════════════════════════════════
+// DOM HELPER
+// ═══════════════════════════════════════
+function h(tag,attrs,...children){
+  const el=document.createElement(tag);
+  if(attrs)for(const[k,v]of Object.entries(attrs)){
+    if(k==="style"&&typeof v==="object")Object.assign(el.style,v);
+    else if(k.startsWith("on"))el.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="className")el.className=v;
+    else el.setAttribute(k,v);
   }
+  for(const c of children.flat()){if(c==null||c===false)continue;el.appendChild(typeof c==="string"?document.createTextNode(c):c)}
   return el;
 }
 
-function renderSuggestions() {
-  const sc = document.getElementById("suggestions-container");
-  if (!sc) return;
-  sc.innerHTML = "";
-  if (state.suggestions.length === 0) return;
-  const dd = h("div", { style: { position:"absolute", top:"calc(100% + 6px)", left:"0", right:"60px", background:"#1e293b", border:"1px solid #334155", borderRadius:"14px", overflow:"hidden", zIndex:"20", boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }});
-  state.suggestions.forEach(s => {
-    const z = getZone(getZoneForItem(s));
-    dd.appendChild(h("button", {
-      style: { width:"100%", padding:"12px 16px", background:"transparent", border:"none", borderBottom:"1px solid #1e293b50", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"10px", textAlign:"left" },
-      onMousedown: () => addItem(s),
+// ═══════════════════════════════════════
+// PARTIAL RENDERS
+// ═══════════════════════════════════════
+function renderSuggestions(){
+  const sc=document.getElementById("sug-container");
+  if(!sc)return;
+  sc.innerHTML="";
+  if(!S.suggestions.length)return;
+  const dd=h("div",{style:{position:"absolute",top:"calc(100% + 6px)",left:"0",right:"60px",background:"#1e293b",border:"1px solid #334155",borderRadius:"14px",overflow:"hidden",zIndex:"20",boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}});
+  S.suggestions.forEach(s=>{
+    const z=getZone(getZoneForItem(s,"kiwi"));
+    const storeEmojis=getStoresForItem(s).map(sid=>getStore(sid).emoji).join("");
+    dd.appendChild(h("button",{
+      style:{width:"100%",padding:"12px 16px",background:"transparent",border:"none",borderBottom:"1px solid #0f172a30",color:"#e2e8f0",fontSize:"15px",display:"flex",alignItems:"center",gap:"10px",textAlign:"left"},
+      onMousedown:()=>addItem(s),
     },
-      h("span", {}, z.emoji),
-      h("span", { style: { textTransform:"capitalize", flex:"1" }}, s),
-      h("span", { style: { fontSize:"11px", color:"#64748b", background:"#0f172a", padding:"2px 8px", borderRadius:"6px" }}, z.name),
+      h("span",{},z.emoji),
+      h("span",{style:{textTransform:"capitalize",flex:"1"}},s),
+      h("span",{style:{fontSize:"13px",marginRight:"4px"}},storeEmojis),
+      h("span",{style:{fontSize:"11px",color:"#64748b",background:"#0f172a",padding:"2px 8px",borderRadius:"6px"}},z.name),
     ));
   });
   sc.appendChild(dd);
 }
 
-function updateAddBtn() {
-  const btn = document.getElementById("add-btn");
-  if (!btn) return;
-  const hasVal = state.inputValue.trim();
-  btn.style.background = hasVal ? "linear-gradient(135deg,#60a5fa,#3b82f6)" : "#1e293b";
-  btn.style.color = hasVal ? "#fff" : "#475569";
+function updateAddBtn(){
+  const btn=document.getElementById("add-btn");
+  if(!btn)return;
+  const has=S.inputValue.trim();
+  btn.style.background=has?"linear-gradient(135deg,#60a5fa,#3b82f6)":"#1e293b";
+  btn.style.color=has?"#fff":"#475569";
 }
 
-function render() {
-  const app = document.getElementById("app");
-  app.innerHTML = "";
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render(){
+  const app=document.getElementById("app");
+  app.innerHTML="";
 
-  if (state.view === "editStore" && state.editingStore) {
-    app.appendChild(renderEditStore());
-  } else if (state.view === "stores") {
-    app.appendChild(renderStores());
-  } else {
-    app.appendChild(renderList());
+  if(!S.loaded){
+    app.appendChild(h("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}},
+      h("div",{style:{textAlign:"center",color:"#94a3b8"}},
+        h("div",{style:{fontSize:"32px",marginBottom:"12px"}},"🛒"),
+        h("div",{style:{fontSize:"16px"}},"Kobler til..."),
+      )
+    ));
+    return;
   }
+
+  if(S.view==="settings")app.appendChild(renderSettings());
+  else app.appendChild(renderList());
 }
 
-// ─── EDIT STORE ───
-function renderEditStore() {
-  const es = state.editingStore;
-  return h("div", { style: { minHeight:"100vh", background:"#0f172a", paddingBottom:"40px" }},
-    // Header
-    h("div", { style: { padding:"16px 20px", display:"flex", alignItems:"center", gap:"12px", borderBottom:"1px solid #1e293b", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }},
-      h("button", { style: { background:"none", border:"none", color:"#60a5fa", fontSize:"16px", padding:"4px 0" }, onClick: () => setState({ view:"stores" }) }, "← Tilbake"),
-      h("span", { style: { fontSize:"18px", fontWeight:"600" }}, "Rediger butikk")
-    ),
-    h("div", { style: { padding:"20px" }},
-      // Name
-      h("div", { style: { marginBottom:"28px" }},
-        h("label", { style: { fontSize:"13px", color:"#94a3b8", marginBottom:"8px", display:"block", textTransform:"uppercase", letterSpacing:"1px" }}, "Butikknavn"),
-        h("input", {
-          value: es.name,
-          style: { width:"100%", padding:"14px 16px", background:"#1e293b", border:"2px solid #334155", borderRadius:"14px", color:"#e2e8f0", fontSize:"17px", outline:"none" },
-          onInput: (e) => {
-            es.name = e.target.value;
-            const s = state.stores.find(s=>s.id===es.id);
-            if (s) s.name = e.target.value;
-            persist();
-          },
-          onFocus: (e) => e.target.style.borderColor="#60a5fa",
-          onBlur: (e) => e.target.style.borderColor="#334155",
-        })
+// ─── SETTINGS ───
+function renderSettings(){
+  const sid=S.editingStoreId||"kiwi";
+  const store=getStore(sid);
+  const zones=S.zoneOrder[sid]||ZONES.map(z=>z.id);
+
+  const wrap=h("div",{style:{minHeight:"100vh",background:"#0f172a",paddingBottom:"40px"}});
+
+  wrap.appendChild(h("div",{style:{padding:"16px 20px",display:"flex",alignItems:"center",gap:"12px",borderBottom:"1px solid #1e293b",position:"sticky",top:"0",zIndex:"10",background:"#0f172a"}},
+    h("button",{style:{background:"none",border:"none",color:"#60a5fa",fontSize:"16px",padding:"4px 0"},onClick:()=>{S.view="list";render()}},"← Tilbake"),
+    h("span",{style:{fontSize:"18px",fontWeight:"600"}},"Innstillinger"),
+  ));
+
+  const content=h("div",{style:{padding:"20px"}});
+
+  content.appendChild(h("label",{style:{fontSize:"12px",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px",display:"block"}},"Velg butikk"));
+  const tabs=h("div",{style:{display:"flex",gap:"6px",marginBottom:"24px"}});
+  STORE_DEFS.forEach(sd=>{
+    const active=sid===sd.id;
+    tabs.appendChild(h("button",{
+      style:{flex:"1",padding:"10px",borderRadius:"12px",border:active?"2px solid "+sd.color:"2px solid #334155",background:active?sd.color+"20":"transparent",color:active?sd.color:"#94a3b8",fontSize:"14px",fontWeight:"600",textAlign:"center"},
+      onClick:()=>{S.editingStoreId=sd.id;render()},
+    },sd.emoji+" "+sd.name));
+  });
+  content.appendChild(tabs);
+
+  content.appendChild(h("label",{style:{fontSize:"12px",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px",display:"block"}},"Sonerekkefølge – ruten gjennom "+store.name));
+
+  zones.forEach((zid,idx)=>{
+    const z=getZone(zid);
+    content.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"12px",padding:"12px 16px",background:"#1e293b",borderRadius:"12px",marginBottom:"6px"}},
+      h("span",{style:{fontSize:"13px",color:"#64748b",fontWeight:"700",width:"24px",textAlign:"center"}},String(idx+1)),
+      h("span",{style:{fontSize:"20px"}},z.emoji),
+      h("span",{style:{flex:"1",fontSize:"15px",fontWeight:"500"}},z.name),
+      h("div",{style:{display:"flex",gap:"4px"}},
+        h("button",{
+          style:{width:"36px",height:"36px",borderRadius:"8px",border:"none",background:idx===0?"#1e293b":"#334155",color:idx===0?"#475569":"#e2e8f0",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center"},
+          onClick:()=>moveZone(sid,idx,-1),
+        },"↑"),
+        h("button",{
+          style:{width:"36px",height:"36px",borderRadius:"8px",border:"none",background:idx===zones.length-1?"#1e293b":"#334155",color:idx===zones.length-1?"#475569":"#e2e8f0",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center"},
+          onClick:()=>moveZone(sid,idx,1),
+        },"↓"),
       ),
-      // Zones
-      h("label", { style: { fontSize:"13px", color:"#94a3b8", marginBottom:"12px", display:"block", textTransform:"uppercase", letterSpacing:"1px" }}, "Sonerekkefølge – din rute gjennom butikken"),
-      ...es.zones.map((zid, idx) => {
-        const z = getZone(zid);
-        return h("div", { style: { display:"flex", alignItems:"center", gap:"12px", padding:"12px 16px", background:"#1e293b", borderRadius:"12px", marginBottom:"8px" }},
-          h("span", { style: { fontSize:"13px", color:"#64748b", fontWeight:"700", width:"24px", textAlign:"center" }}, String(idx+1)),
-          h("span", { style: { fontSize:"20px" }}, z.emoji),
-          h("span", { style: { flex:"1", fontSize:"15px", fontWeight:"500" }}, z.name),
-          h("div", { style: { display:"flex", gap:"4px" }},
-            h("button", {
-              style: { width:"36px", height:"36px", borderRadius:"8px", border:"none", background: idx===0?"#1e293b":"#334155", color: idx===0?"#475569":"#e2e8f0", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" },
-              onClick: () => moveZone(idx, -1),
-            }, "↑"),
-            h("button", {
-              style: { width:"36px", height:"36px", borderRadius:"8px", border:"none", background: idx===es.zones.length-1?"#1e293b":"#334155", color: idx===es.zones.length-1?"#475569":"#e2e8f0", fontSize:"16px", display:"flex", alignItems:"center", justifyContent:"center" },
-              onClick: () => moveZone(idx, 1),
-            }, "↓"),
-          )
-        );
-      }),
-      // Delete
-      state.stores.length > 1 ? h("button", {
-        style: { marginTop:"32px", width:"100%", padding:"14px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:"14px", color:"#ef4444", fontSize:"15px", fontWeight:"600" },
-        onClick: () => deleteStore(es.id),
-      }, "Slett butikk") : null
-    )
-  );
-}
+    ));
+  });
 
-// ─── STORE LIST ───
-function renderStores() {
-  return h("div", { style: { minHeight:"100vh", background:"#0f172a" }},
-    h("div", { style: { padding:"16px 20px", display:"flex", alignItems:"center", gap:"12px", borderBottom:"1px solid #1e293b", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }},
-      h("button", { style: { background:"none", border:"none", color:"#60a5fa", fontSize:"16px", padding:"4px 0" }, onClick: () => setState({ view:"list" }) }, "← Tilbake"),
-      h("span", { style: { fontSize:"18px", fontWeight:"600", flex:"1" }}, "Butikker"),
-      h("button", { style: { background:"#60a5fa", border:"none", color:"#0f172a", borderRadius:"10px", padding:"8px 16px", fontSize:"14px", fontWeight:"700" }, onClick: addStore }, "+ Ny"),
-    ),
-    h("div", { style: { padding:"20px" }},
-      ...state.stores.map(store => {
-        const count = state.items.filter(i=>i.storeId===store.id && !i.checked).length;
-        return h("div", {
-          style: { display:"flex", alignItems:"center", gap:"14px", padding:"16px 18px", background: store.id===state.activeStoreId?"#1e293b":"transparent", borderRadius:"14px", marginBottom:"6px", cursor:"pointer", border: store.id===state.activeStoreId?"1px solid #334155":"1px solid transparent" },
-          onClick: () => setState({ activeStoreId: store.id, view: "list" }),
-        },
-          h("div", { style: { width:"44px", height:"44px", borderRadius:"12px", background:"linear-gradient(135deg,#1e293b,#334155)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", flexShrink:"0" }}, "🏪"),
-          h("div", { style: { flex:"1", minWidth:"0" }},
-            h("div", { style: { fontSize:"16px", fontWeight:"600" }}, store.name),
-            h("div", { style: { fontSize:"13px", color:"#64748b" }}, count > 0 ? count + " vare" + (count!==1?"r":"") : "Tom liste"),
-          ),
-          h("button", {
-            style: { background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:"10px", padding:"8px 14px", fontSize:"13px", flexShrink:"0" },
-            onClick: (e) => { e.stopPropagation(); setState({ editingStore: store, view:"editStore" }); },
-          }, "Rediger"),
-        );
-      })
-    )
-  );
+  const prefKeys=Object.keys(S.storePrefs).filter(k=>{
+    const p=S.storePrefs[k];
+    return Array.isArray(p)&&(p.includes("meny")||p.includes("andre")||p.length>1);
+  });
+  if(prefKeys.length>0){
+    content.appendChild(h("label",{style:{fontSize:"12px",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"1px",marginTop:"28px",marginBottom:"10px",display:"block"}},"Lagrede butikkvalg"));
+    prefKeys.sort().forEach(k=>{
+      const stores=S.storePrefs[k];
+      const labels=stores.map(s=>getStore(s).emoji+" "+getStore(s).name).join(", ");
+      content.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",background:"#1e293b",borderRadius:"10px",marginBottom:"4px"}},
+        h("span",{style:{flex:"1",fontSize:"14px",textTransform:"capitalize"}},k),
+        h("span",{style:{fontSize:"12px",color:"#94a3b8"}},labels),
+        h("button",{style:{background:"none",border:"none",color:"#ef4444",fontSize:"14px",padding:"4px 8px"},onClick:()=>{delete S.storePrefs[k];saveStorePrefs();render()}},"✕"),
+      ));
+    });
+  }
+
+  wrap.appendChild(content);
+  return wrap;
 }
 
 // ─── MAIN LIST ───
-function renderList() {
-  const store = activeStore();
-  const storeItems = state.items.filter(i=>i.storeId===state.activeStoreId);
-  const unchecked = storeItems.filter(i=>!i.checked).length;
-  const checked = storeItems.filter(i=>i.checked).length;
-  const zoneOrder = store?.zones || ZONES.map(z=>z.id);
+function renderList(){
+  const tab=S.activeTab;
+  const wrap=h("div",{style:{minHeight:"100vh",background:"#0f172a",paddingBottom:"100px"}});
 
-  const grouped = zoneOrder.map(zid => ({
-    zone: getZone(zid),
-    items: storeItems.filter(i=>i.zone===zid),
-  })).filter(g=>g.items.length>0);
+  const header=h("div",{style:{padding:"20px 20px 0",position:"sticky",top:"0",zIndex:"10",background:"#0f172a"}});
 
-  const container = h("div", { style: { minHeight:"100vh", background:"#0f172a", paddingBottom:"100px" }});
+  const titleRow=h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}});
+  const titleLeft=h("div",{});
+  titleLeft.appendChild(h("h1",{style:{fontSize:"26px",fontWeight:"800",letterSpacing:"-0.5px",color:"#e2e8f0"}},"Handleliste"));
+  const syncRow=h("div",{style:{display:"flex",alignItems:"center",marginTop:"4px"}});
+  syncRow.appendChild(h("span",{id:"sync-dot",className:"sync-dot "+(isOnline?"online":"offline")}));
+  syncRow.appendChild(h("span",{id:"sync-label",style:{fontSize:"11px",color:"#64748b"}},isOnline?"Synkronisert":"Offline"));
+  titleLeft.appendChild(syncRow);
+  titleRow.appendChild(titleLeft);
 
-  // ── Header ──
-  const header = h("div", { style: { padding:"20px 20px 16px", position:"sticky", top:"0", zIndex:"10", background:"#0f172a" }});
+  const headerBtns=h("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
+  let viewItems=tab==="alle"?S.items:S.items.filter(i=>i.stores&&i.stores.includes(tab));
+  const checkedCount=tab==="alle"?S.items.filter(i=>isFullyChecked(i)).length:viewItems.filter(i=>i.checked&&i.checked[tab]).length;
 
-  const topRow = h("div", { style: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }});
-  const left = h("div", {},
-    h("h1", { style: { margin:"0", fontSize:"28px", fontWeight:"800", letterSpacing:"-0.5px", color:"#e2e8f0" }}, "Handleliste"),
-    h("button", {
-      style: { background:"none", border:"none", color:"#60a5fa", fontSize:"14px", padding:"4px 0", display:"flex", alignItems:"center", gap:"6px" },
-      onClick: () => setState({ view:"stores" }),
-    }, "🏪 " + (store?.name || "Velg butikk") + " ›"),
-  );
-  topRow.appendChild(left);
-
-  if (checked > 0) {
-    topRow.appendChild(h("button", {
-      style: { background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#f87171", borderRadius:"12px", padding:"8px 14px", fontSize:"13px", fontWeight:"600", flexShrink:"0" },
-      onClick: clearChecked,
-    }, "Fjern ✓ (" + checked + ")"));
-  }
-  header.appendChild(topRow);
-
-  // Counter pills
-  if (storeItems.length > 0) {
-    const pills = h("div", { style: { display:"flex", gap:"8px", marginBottom:"16px" }});
-    pills.appendChild(h("span", { style: { background:"#1e293b", borderRadius:"20px", padding:"5px 14px", fontSize:"13px", fontWeight:"600", color:"#94a3b8" }}, unchecked + " igjen"));
-    if (checked > 0) {
-      pills.appendChild(h("span", { style: { background:"rgba(74,222,128,0.1)", borderRadius:"20px", padding:"5px 14px", fontSize:"13px", fontWeight:"600", color:"#4ade80" }}, "✓ " + checked + " ferdig"));
-    }
-    header.appendChild(pills);
+  if(checkedCount>0){
+    headerBtns.appendChild(h("button",{
+      style:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",color:"#f87171",borderRadius:"12px",padding:"7px 12px",fontSize:"12px",fontWeight:"600"},
+      onClick:()=>clearChecked(tab),
+    },"Fjern ✓ ("+checkedCount+")"));
   }
 
-  // Input
-  const inputWrap = h("div", { style: { position:"relative" }});
-  const inputRow = h("div", { style: { display:"flex", gap:"8px" }});
+  headerBtns.appendChild(h("button",{
+    style:{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:"10px",padding:"7px 12px",fontSize:"18px"},
+    onClick:()=>{S.view="settings";S.editingStoreId="kiwi";render()},
+  },"⚙"));
 
-  const inp = h("input", {
-    id: "main-input",
-    value: state.inputValue,
-    placeholder: "Legg til vare...",
-    style: { flex:"1", padding:"14px 18px", background:"#1e293b", border:"2px solid #334155", borderRadius:"16px", color:"#e2e8f0", fontSize:"16px", outline:"none", minWidth:"0" },
-    onInput: (e) => { state.inputValue = e.target.value; updateSuggestions(e.target.value); renderSuggestions(); updateAddBtn(); },
-    onKeydown: (e) => { if (e.key==="Enter") addItem(state.inputValue); },
-    onFocus: (e) => e.target.style.borderColor="#60a5fa",
-    onBlur: (e) => { setTimeout(()=>{ e.target.style.borderColor="#334155"; state.suggestions=[]; renderSuggestions(); }, 200); },
-  });
-  inputRow.appendChild(inp);
+  titleRow.appendChild(headerBtns);
+  header.appendChild(titleRow);
 
-  const addBtn = h("button", {
-    id: "add-btn",
-    style: { width:"52px", height:"52px", background: state.inputValue.trim() ? "linear-gradient(135deg,#60a5fa,#3b82f6)" : "#1e293b", border:"none", borderRadius:"16px", color: state.inputValue.trim() ? "#fff" : "#475569", fontSize:"24px", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:"0", transition:"all 0.2s" },
-    onClick: () => addItem(state.inputValue),
-  }, "+");
-  inputRow.appendChild(addBtn);
-  inputWrap.appendChild(inputRow);
-
-  // Suggestions container (updated dynamically)
-  const sugContainer = h("div", { id: "suggestions-container" });
-  inputWrap.appendChild(sugContainer);
-
-  header.appendChild(inputWrap);
-  container.appendChild(header);
-
-  // ── Items ──
-  const list = h("div", { style: { padding:"8px 20px" }});
-
-  if (storeItems.length === 0) {
-    list.appendChild(h("div", { style: { textAlign:"center", padding:"60px 20px", color:"#475569" }},
-      h("div", { style: { fontSize:"48px", marginBottom:"16px" }}, "🛒"),
-      h("div", { style: { fontSize:"17px", fontWeight:"600", marginBottom:"6px" }}, "Handlelisten er tom"),
-      h("div", { style: { fontSize:"14px" }}, "Legg til varer for å komme i gang"),
+  const tabBar=h("div",{style:{display:"flex",gap:"4px",background:"#1e293b",borderRadius:"14px",padding:"4px",marginBottom:"14px"}});
+  const tabDefs=[...STORE_DEFS,{id:"alle",name:"Alle",emoji:"📋",color:"#60a5fa"}];
+  tabDefs.forEach(td=>{
+    const count=td.id==="alle"?S.items.filter(i=>!isFullyChecked(i)).length:S.items.filter(i=>i.stores&&i.stores.includes(td.id)&&!(i.checked&&i.checked[td.id])).length;
+    const active=tab===td.id;
+    tabBar.appendChild(h("button",{
+      style:{flex:"1",padding:"9px 4px",border:"none",borderRadius:"11px",fontSize:"13px",fontWeight:"600",textAlign:"center",transition:"all 0.2s",background:active?td.color:"transparent",color:active?"#0f172a":"#64748b"},
+      onClick:()=>{S.activeTab=td.id;localStorage.setItem("hl-tab",td.id);render()},
+    },
+      h("span",{},td.emoji),
+      count>0?h("span",{style:{marginLeft:"4px"}},String(count)):null,
     ));
-  }
+  });
+  header.appendChild(tabBar);
 
-  grouped.forEach(({ zone, items }) => {
-    const section = h("div", { style: { marginBottom:"20px" }});
+  const inputWrap=h("div",{style:{position:"relative",paddingBottom:"16px"}});
+  const inputRow=h("div",{style:{display:"flex",gap:"8px"}});
+  inputRow.appendChild(h("input",{
+    id:"main-input",value:S.inputValue,placeholder:"Legg til vare...",
+    style:{flex:"1",padding:"14px 18px",background:"#1e293b",border:"2px solid #334155",borderRadius:"16px",color:"#e2e8f0",fontSize:"16px",outline:"none",minWidth:"0",transition:"border-color 0.2s"},
+    onInput:e=>{S.inputValue=e.target.value;updateSuggestions(e.target.value);renderSuggestions();updateAddBtn()},
+    onKeydown:e=>{if(e.key==="Enter")addItem(S.inputValue)},
+    onFocus:e=>e.target.style.borderColor="#60a5fa",
+    onBlur:e=>{setTimeout(()=>{e.target.style.borderColor="#334155";S.suggestions=[];renderSuggestions()},200)},
+  }));
+  inputRow.appendChild(h("button",{
+    id:"add-btn",
+    style:{width:"52px",height:"52px",border:"none",borderRadius:"16px",fontSize:"24px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0",transition:"all 0.2s",
+      background:S.inputValue.trim()?"linear-gradient(135deg,#60a5fa,#3b82f6)":"#1e293b",
+      color:S.inputValue.trim()?"#fff":"#475569"},
+    onClick:()=>addItem(S.inputValue),
+  },"+"));
+  inputWrap.appendChild(inputRow);
+  inputWrap.appendChild(h("div",{id:"sug-container"}));
+  header.appendChild(inputWrap);
+  wrap.appendChild(header);
 
-    // Zone header
-    const zh = h("div", { style: { display:"flex", alignItems:"center", gap:"10px", padding:"8px 0" }});
-    zh.appendChild(h("div", { style: { width:"6px", height:"6px", borderRadius:"50%", background:zone.color, boxShadow:"0 0 8px "+zone.color+"50" }}));
-    zh.appendChild(h("span", { style: { fontSize:"12px", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.08em", color:zone.color }}, zone.emoji + " " + zone.name));
-    zh.appendChild(h("div", { style: { flex:"1", height:"1px", background:zone.color+"20" }}));
-    section.appendChild(zh);
+  const list=h("div",{style:{padding:"0 20px"}});
+  let displayItems=tab==="alle"?S.items.filter(i=>!isFullyChecked(i)):S.items.filter(i=>i.stores&&i.stores.includes(tab));
 
-    // Items
-    items.forEach(item => {
-      const row = h("div", {
-        className: "item-row",
-        style: { display:"flex", alignItems:"center", gap:"14px", padding:"13px 14px", background: item.checked?"transparent":"#1e293b", borderRadius:"14px", marginBottom:"4px", opacity: item.checked?"0.4":"1", transition:"all 0.2s", border: item.checked?"1px solid transparent":"1px solid #1e293b", position:"relative" },
-      });
+  if(displayItems.length===0){
+    list.appendChild(h("div",{style:{textAlign:"center",padding:"60px 20px",color:"#475569"}},
+      h("div",{style:{fontSize:"48px",marginBottom:"16px"}},"🛒"),
+      h("div",{style:{fontSize:"17px",fontWeight:"600",marginBottom:"6px"}},tab==="alle"?"Handlelisten er tom":"Ingen varer på "+getStore(tab).name),
+      h("div",{style:{fontSize:"14px"}},"Legg til varer ovenfor"),
+    ));
+  } else if(tab==="alle"){
+    STORE_DEFS.forEach(sd=>{
+      const storeItems=displayItems.filter(i=>i.stores&&i.stores.includes(sd.id)&&!(i.checked&&i.checked[sd.id]));
+      if(!storeItems.length)return;
+      const sh=h("div",{style:{display:"flex",alignItems:"center",gap:"10px",padding:"14px 0 8px"}});
+      sh.appendChild(h("span",{style:{fontSize:"16px"}},sd.emoji));
+      sh.appendChild(h("span",{style:{fontSize:"14px",fontWeight:"700",color:sd.color}},sd.name));
+      sh.appendChild(h("span",{style:{fontSize:"12px",color:"#64748b",background:"#1e293b",padding:"2px 10px",borderRadius:"8px"}},storeItems.length+" vare"+(storeItems.length!==1?"r":"")));
+      sh.appendChild(h("div",{style:{flex:"1",height:"1px",background:sd.color+"30"}}));
+      list.appendChild(sh);
+      storeItems.forEach(item=>list.appendChild(renderItemRow(item,sd.id,true)));
+    });
+  } else {
+    const zoneOrder=S.zoneOrder[tab]||ZONES.map(z=>z.id);
+    const uncheckedItems=displayItems.filter(i=>!(i.checked&&i.checked[tab]));
+    const checkedItems=displayItems.filter(i=>i.checked&&i.checked[tab]);
 
-      // Checkbox
-      row.appendChild(h("button", {
-        className: "cb",
-        style: { width:"28px", height:"28px", borderRadius:"8px", border: item.checked?"none":"2px solid "+zone.color+"60", background: item.checked?zone.color:"transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px", color:"#0f172a", flexShrink:"0", transition:"all 0.2s" },
-        onClick: () => toggleItem(item.id),
-      }, item.checked ? "✓" : ""));
+    const grouped=zoneOrder.map(zid=>({
+      zone:getZone(zid),
+      items:uncheckedItems.filter(i=>(i["zone_"+tab]||getZoneForItem(i.name,tab))===zid),
+    })).filter(g=>g.items.length>0);
 
-      // Name
-      row.appendChild(h("span", {
-        style: { flex:"1", fontSize:"16px", fontWeight:"500", textDecoration: item.checked?"line-through":"none", textTransform:"capitalize", minWidth:"0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
-      }, item.name));
-
-      // Zone reassign
-      row.appendChild(h("button", {
-        style: { background:"none", border:"none", fontSize:"16px", padding:"4px", opacity:"0.5", flexShrink:"0" },
-        onClick: () => setState({ zonePicker: state.zonePicker===item.id ? null : item.id }),
-      }, zone.emoji));
-
-      // Delete
-      row.appendChild(h("button", {
-        style: { background:"none", border:"none", color:"#475569", fontSize:"20px", padding:"4px", lineHeight:"1", flexShrink:"0" },
-        onClick: () => removeItem(item.id),
-      }, "×"));
-
-      section.appendChild(row);
+    grouped.forEach(({zone,items})=>{
+      const zh=h("div",{style:{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0 6px"}});
+      zh.appendChild(h("div",{style:{width:"6px",height:"6px",borderRadius:"50%",background:zone.color,boxShadow:"0 0 8px "+zone.color+"50"}}));
+      zh.appendChild(h("span",{style:{fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",color:zone.color}},zone.emoji+" "+zone.name));
+      zh.appendChild(h("div",{style:{flex:"1",height:"1px",background:zone.color+"20"}}));
+      list.appendChild(zh);
+      items.forEach(item=>list.appendChild(renderItemRow(item,tab,false)));
     });
 
-    list.appendChild(section);
-  });
-
-  container.appendChild(list);
-
-  // ── Zone Picker Bottom Sheet ──
-  if (state.zonePicker) {
-    const item = state.items.find(i=>i.id===state.zonePicker);
-    if (item) {
-      const overlay = h("div", {
-        style: { position:"fixed", top:"0", left:"0", right:"0", bottom:"0", background:"rgba(0,0,0,0.6)", zIndex:"100", display:"flex", alignItems:"flex-end", justifyContent:"center" },
-        onClick: () => setState({ zonePicker: null }),
-      });
-      const sheet = h("div", {
-        className: "bottom-sheet",
-        style: { background:"#1e293b", borderRadius:"20px 20px 0 0", padding:"20px", width:"100%", maxWidth:"500px", maxHeight:"60vh", overflow:"auto", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" },
-        onClick: (e) => e.stopPropagation(),
-      });
-      sheet.appendChild(h("div", { style: { width:"40px", height:"4px", background:"#475569", borderRadius:"2px", margin:"0 auto 16px" }}));
-      sheet.appendChild(h("div", { style: { fontSize:"16px", fontWeight:"700", marginBottom:"14px", textAlign:"center" }}, "Flytt «" + item.name + "» til:"));
-
-      const store = activeStore();
-      (store?.zones || []).forEach(zid => {
-        const z = getZone(zid);
-        sheet.appendChild(h("button", {
-          style: { width:"100%", padding:"14px 16px", background: item.zone===zid ? z.color+"20" : "transparent", border: item.zone===zid ? "1px solid "+z.color+"40" : "1px solid transparent", borderRadius:"12px", color:"#e2e8f0", fontSize:"15px", display:"flex", alignItems:"center", gap:"12px", marginBottom:"4px", textAlign:"left" },
-          onClick: () => reassignZone(item.id, zid),
-        },
-          h("span", { style: { fontSize:"22px" }}, z.emoji),
-          h("span", { style: { fontWeight: item.zone===zid?"700":"400", flex:"1" }}, z.name),
-          item.zone===zid ? h("span", { style: { color:z.color }}, "✓") : null,
-        ));
-      });
-
-      overlay.appendChild(sheet);
-      container.appendChild(overlay);
+    if(checkedItems.length>0){
+      list.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px",padding:"16px 0 8px"}},
+        h("span",{style:{fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",color:"#475569"}},"✓ Ferdig"),
+        h("div",{style:{flex:"1",height:"1px",background:"#1e293b"}}),
+      ));
+      checkedItems.forEach(item=>list.appendChild(renderItemRow(item,tab,false)));
     }
   }
 
-  return container;
+  wrap.appendChild(list);
+  addBottomSheet(wrap);
+  return wrap;
 }
 
-// Initial render
+function renderItemRow(item,storeId,showStoreBadge){
+  const isChecked=item.checked&&!!item.checked[storeId];
+  const zoneId=item["zone_"+storeId]||getZoneForItem(item.name,storeId);
+  const zone=getZone(zoneId);
+
+  const row=h("div",{
+    className:"item-enter",
+    style:{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",borderRadius:"14px",marginBottom:"4px",transition:"all 0.2s",background:isChecked?"transparent":"#1e293b",border:isChecked?"1px solid transparent":"1px solid #1e293b",opacity:isChecked?"0.35":"1"},
+  });
+
+  row.appendChild(h("button",{
+    style:{width:"28px",height:"28px",borderRadius:"8px",border:isChecked?"none":"2px solid "+zone.color+"60",background:isChecked?zone.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",color:"#0f172a",flexShrink:"0",transition:"all 0.15s"},
+    onClick:()=>toggleItem(item.id,storeId),
+  },isChecked?"✓":""));
+
+  const nameCol=h("div",{style:{flex:"1",minWidth:"0"}});
+  const nameRow=h("div",{style:{display:"flex",alignItems:"center",gap:"6px"}});
+  nameRow.appendChild(h("span",{style:{fontSize:"15px",fontWeight:"500",textTransform:"capitalize",textDecoration:isChecked?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},item.name));
+
+  if(showStoreBadge&&item.stores&&item.stores.length>1){
+    item.stores.forEach(sid=>{
+      if(sid===storeId)return;
+      nameRow.appendChild(h("span",{style:{fontSize:"11px",opacity:"0.6"}},getStore(sid).emoji));
+    });
+  }
+  nameCol.appendChild(nameRow);
+
+  if(item.note){
+    nameCol.appendChild(h("div",{style:{fontSize:"12px",color:"#64748b",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},item.note));
+  }
+  row.appendChild(nameCol);
+
+  const actions=h("div",{style:{display:"flex",alignItems:"center",gap:"2px",flexShrink:"0"}});
+  if(item.stores&&item.stores.length>1)actions.appendChild(h("span",{style:{fontSize:"12px",opacity:"0.5"}},"📌"));
+
+  actions.appendChild(h("button",{
+    style:{background:"none",border:"none",fontSize:"16px",padding:"6px",opacity:"0.5"},
+    onClick:()=>{S.sheetItem=item.id;S.sheetType="zone";render()},
+  },zone.emoji));
+
+  actions.appendChild(h("button",{
+    style:{background:"none",border:"none",fontSize:"14px",padding:"6px",color:"#64748b"},
+    onClick:()=>{S.sheetItem=item.id;S.sheetType="store";render()},
+  },"•••"));
+
+  actions.appendChild(h("button",{
+    style:{background:"none",border:"none",color:"#475569",fontSize:"20px",padding:"4px 2px",lineHeight:"1"},
+    onClick:()=>removeItem(item.id),
+  },"×"));
+
+  row.appendChild(actions);
+  return row;
+}
+
+function addBottomSheet(wrap){
+  if(!S.sheetItem)return;
+  const item=S.items.find(i=>i.id===S.sheetItem);
+  if(!item)return;
+
+  const overlay=h("div",{
+    style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.6)",zIndex:"100",display:"flex",alignItems:"flex-end",justifyContent:"center"},
+    onClick:()=>{S.sheetItem=null;S.sheetType=null;render()},
+  });
+
+  const sheet=h("div",{
+    className:"bottom-sheet",
+    style:{background:"#1e293b",borderRadius:"20px 20px 0 0",padding:"20px",width:"100%",maxWidth:"500px",maxHeight:"70vh",overflow:"auto",paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))"},
+    onClick:e=>e.stopPropagation(),
+  });
+
+  sheet.appendChild(h("div",{style:{width:"40px",height:"4px",background:"#475569",borderRadius:"2px",margin:"0 auto 16px"}}));
+
+  if(S.sheetType==="store"){
+    sheet.appendChild(h("div",{style:{fontSize:"16px",fontWeight:"700",textAlign:"center",marginBottom:"6px"}},"Butikk for «"+item.name+"»"));
+    sheet.appendChild(h("div",{style:{fontSize:"13px",color:"#64748b",textAlign:"center",marginBottom:"16px"}},"Appen husker valget ditt"));
+
+    STORE_DEFS.forEach(sd=>{
+      const isActive=item.stores&&item.stores.includes(sd.id);
+      sheet.appendChild(h("button",{
+        style:{width:"100%",padding:"14px 16px",borderRadius:"12px",color:"#e2e8f0",fontSize:"15px",display:"flex",alignItems:"center",gap:"12px",marginBottom:"4px",textAlign:"left",background:isActive?sd.color+"20":"transparent",border:isActive?"1px solid "+sd.color+"40":"1px solid transparent"},
+        onClick:()=>{
+          let ns;
+          if(isActive){ns=(item.stores||[]).filter(s=>s!==sd.id);if(!ns.length)ns=["kiwi"]}
+          else ns=[...(item.stores||[]),sd.id];
+          setItemStores(item.id,ns);
+        },
+      },
+        h("span",{style:{fontSize:"22px"}},sd.emoji),
+        h("span",{style:{flex:"1",fontWeight:isActive?"600":"400"}},sd.name),
+        isActive?h("span",{style:{color:sd.color,fontSize:"18px"}},"✓"):null,
+      ));
+    });
+
+    sheet.appendChild(h("div",{style:{marginTop:"16px"}}));
+    sheet.appendChild(h("label",{style:{fontSize:"12px",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px",display:"block"}},"Notat (valgfritt)"));
+    sheet.appendChild(h("input",{
+      value:item.note||"",placeholder:"F.eks. den store pakken, økologisk...",
+      style:{width:"100%",padding:"12px 16px",background:"#0f172a",border:"2px solid #334155",borderRadius:"12px",color:"#e2e8f0",fontSize:"15px",outline:"none"},
+      onInput:e=>setItemNote(item.id,e.target.value),
+      onFocus:e=>e.target.style.borderColor="#60a5fa",
+      onBlur:e=>e.target.style.borderColor="#334155",
+    }));
+
+  } else if(S.sheetType==="zone"){
+    const currentStoreId=S.activeTab==="alle"?"kiwi":S.activeTab;
+    const currentZone=item["zone_"+currentStoreId]||getZoneForItem(item.name,currentStoreId);
+    const store=getStore(currentStoreId);
+
+    sheet.appendChild(h("div",{style:{fontSize:"16px",fontWeight:"700",textAlign:"center",marginBottom:"4px"}},"Sone for «"+item.name+"»"));
+    sheet.appendChild(h("div",{style:{fontSize:"13px",color:"#64748b",textAlign:"center",marginBottom:"16px"}},"På "+store.name+" – appen husker valget"));
+
+    const zones=S.zoneOrder[currentStoreId]||ZONES.map(z=>z.id);
+    zones.forEach(zid=>{
+      const z=getZone(zid);
+      const isActive=currentZone===zid;
+      sheet.appendChild(h("button",{
+        style:{width:"100%",padding:"14px 16px",borderRadius:"12px",color:"#e2e8f0",fontSize:"15px",display:"flex",alignItems:"center",gap:"12px",marginBottom:"4px",textAlign:"left",background:isActive?z.color+"20":"transparent",border:isActive?"1px solid "+z.color+"40":"1px solid transparent"},
+        onClick:()=>setItemZone(item.id,currentStoreId,zid),
+      },
+        h("span",{style:{fontSize:"22px"}},z.emoji),
+        h("span",{style:{flex:"1",fontWeight:isActive?"600":"400"}},z.name),
+        isActive?h("span",{style:{color:z.color}},"✓"):null,
+      ));
+    });
+  }
+
+  overlay.appendChild(sheet);
+  wrap.appendChild(overlay);
+}
+
 render();
 </script>
 </body>
