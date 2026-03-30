@@ -381,13 +381,20 @@ function handleImageImport(){
       if(!response.ok){
         const errBody=await response.text();
         console.error("API error:",response.status,errBody);
-        throw new Error("API-feil: "+response.status);
+        throw new Error(response.status+": "+errBody.slice(0,150));
       }
 
       const data=await response.json();
+      if(data.error){
+        throw new Error(data.error.message||JSON.stringify(data.error));
+      }
       const text=data.content?.map(c=>c.text||"").join("")||"";
+      if(!text){
+        throw new Error("Tomt svar fra API");
+      }
       const clean=text.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
+      let parsed;
+      try{ parsed=JSON.parse(clean); }catch{ throw new Error("Kunne ikke tolke svar: "+clean.slice(0,100)); }
 
       if(!parsed.ingredients||!parsed.ingredients.length){
         S.importLoading=false;S.importError="Fant ingen ingredienser i bildet";render();return;
@@ -403,7 +410,7 @@ function handleImageImport(){
 
     }catch(err){
       console.error("Import error:",err);
-      S.importLoading=false;S.importError="Kunne ikke tolke bildet. Prøv igjen.";render();
+      S.importLoading=false;S.importError=err.message||"Ukjent feil";render();
     }
   };
   input.click();
