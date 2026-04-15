@@ -176,7 +176,11 @@ function checkLoaded(){loadCount++;if(loadCount>=4&&!S.loaded){S.loaded=true;ren
 
 onValue(itemsRef, snap=>{
   const data=snap.val();
-  S.items=data?Object.values(data):[];
+  S.items=data?Object.values(data).map(item=>{
+    // Firebase converts arrays to objects - fix stores field
+    if(item.stores&&!Array.isArray(item.stores))item.stores=Object.values(item.stores);
+    return item;
+  }):[];
   if(S.loaded)render();
   checkLoaded();
 });
@@ -228,8 +232,12 @@ function getZoneForItem(name,storeId){
 }
 
 function getStoresForItem(name){
-  const lower=name.toLowerCase().trim();
-  if(S.storePrefs[lower] && Array.isArray(S.storePrefs[lower]))return[...S.storePrefs[lower]];
+  const lower=name.toLowerCase().trim().replace(/[.#$/\[\]]/g,"_");
+  const val=S.storePrefs[lower];
+  if(!val)return["kiwi"];
+  // Firebase may convert arrays to objects with numeric keys
+  if(Array.isArray(val))return[...val];
+  if(typeof val==="object")return Object.values(val);
   return["kiwi"];
 }
 
@@ -285,7 +293,8 @@ function setItemStores(itemId,newStores){
   item.stores=newStores;
   newStores.forEach(sid=>{if(!item["zone_"+sid])item["zone_"+sid]=getZoneForItem(item.name,sid)});
   if(item.checked)Object.keys(item.checked).forEach(k=>{if(!newStores.includes(k))delete item.checked[k]});
-  S.storePrefs[item.name.toLowerCase().trim()]=newStores;
+  const prefKey=item.name.toLowerCase().trim().replace(/[.#$/\[\]]/g,"_");
+  S.storePrefs[prefKey]=newStores;
   S.sheetItem=null;S.sheetType=null;
   saveItems();saveStorePrefs();render();
 }
