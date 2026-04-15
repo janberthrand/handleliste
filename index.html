@@ -290,20 +290,34 @@ function clearChecked(storeId){
 function setItemStores(itemId,newStores){
   const item=S.items.find(i=>i.id===itemId);
   if(!item)return;
+  // Find the current zone from any existing store assignment
+  const existingZone=item.stores&&item.stores.length>0?
+    (item["zone_"+item.stores[0]]||getZoneForItem(item.name,item.stores[0])):
+    getZoneForItem(item.name,"kiwi");
   item.stores=newStores;
-  newStores.forEach(sid=>{if(!item["zone_"+sid])item["zone_"+sid]=getZoneForItem(item.name,sid)});
+  // Apply existing zone to all new stores
+  newStores.forEach(sid=>{
+    if(!item["zone_"+sid]) item["zone_"+sid]=existingZone;
+    // Also save to zoneMappings so it's remembered
+    const key=sid+"__"+item.name.toLowerCase().trim();
+    if(!S.zoneMappings[key]) S.zoneMappings[key]=existingZone;
+  });
   if(item.checked)Object.keys(item.checked).forEach(k=>{if(!newStores.includes(k))delete item.checked[k]});
   const prefKey=item.name.toLowerCase().trim().replace(/[.#$/\[\]]/g,"_");
   S.storePrefs[prefKey]=newStores;
   S.sheetItem=null;S.sheetType=null;
-  saveItems();saveStorePrefs();render();
+  saveItems();saveStorePrefs();saveZoneMappings();render();
 }
 
 function setItemZone(itemId,storeId,newZone){
   const item=S.items.find(i=>i.id===itemId);
   if(!item)return;
-  item["zone_"+storeId]=newZone;
-  S.zoneMappings[storeId+"__"+item.name.toLowerCase().trim()]=newZone;
+  // Set zone for ALL stores this item is on, not just the current one
+  const stores=item.stores||[storeId];
+  stores.forEach(sid=>{
+    item["zone_"+sid]=newZone;
+    S.zoneMappings[sid+"__"+item.name.toLowerCase().trim()]=newZone;
+  });
   S.sheetItem=null;S.sheetType=null;
   saveItems();saveZoneMappings();render();
 }
